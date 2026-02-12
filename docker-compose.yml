@@ -1,0 +1,26 @@
+services:
+  ros2_jazzy:
+    # L'image officielle contenant Ubuntu 24.04 et ROS 2 Jazzy
+    image: osrf/ros:jazzy-desktop
+    container_name: ros2_jazzy_container
+    
+    # IMPORTANT : Garde le conteneur allumé pour qu'on puisse travailler dedans
+    command: sleep infinity
+    
+    # La configuration réseau pour faciliter la communication
+    network_mode: host
+    ipc: host
+
+    # Les Volumes : C'est le lien entre ton Windows et le Linux
+    volumes:
+      # Mappe ton dossier actuel (Windows) vers le workspace Linux
+      - .:/home/dev_ws
+      # (Optionnel) Pour l'affichage graphique via WSLg (Turtlesim)
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - /mnt/wslg:/mnt/wslg
+
+    # Variables d'environnement pour l'affichage graphique
+    environment:
+      - DISPLAY=${DISPLAY}
+      - WAYLAND_DISPLAY=${WAYLAND_DISPLAY}
+      - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}

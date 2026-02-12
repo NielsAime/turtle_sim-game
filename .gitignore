@@ -1,0 +1,30 @@
+# ROS - Build folders
+devel/
+build/
+install/
+.catkin_workspace
+.catkin_tools/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Docker - Logs et temp (optionnel)
+.docker/
+
+# OS
+.DS_Store
+Thumbs.db
+
+
+# ROS2 build artifacts
+build/
+install/
+log/
+
+
+
+# Fichiers système
+.DS_Store
+Thumbs.db
