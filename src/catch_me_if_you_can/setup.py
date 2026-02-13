@@ -13,6 +13,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
+        (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -30,6 +31,8 @@ setup(
         'console_scripts': [
             "turtle_controller = catch_me_if_you_can.turtle_controller:main",
             "turtle_spawner = catch_me_if_you_can.turtle_spawner:main", 
+            "game_manager = catch_me_if_you_can.game_manager:main",
+            "game_gui = catch_me_if_you_can.game_gui:main",
         ],
     },
     

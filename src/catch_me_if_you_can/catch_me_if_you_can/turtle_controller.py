@@ -1,150 +1,136 @@
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
+from rclpy.executors import MultiThreadedExecutor
+from rclpy.callback_groups import ReentrantCallbackGroup
+from functools import partial
 from turtlesim.msg import Pose
 from geometry_msgs.msg import Twist
-import math # Indispensable pour atan2 et sqrt
-
-# On import la structure du msg du topic alive_turtles, qui contient la liste de tortues vivantes.
-from my_robot_interfaces.msg import TurtleArray
-
+from my_robot_interfaces.msg import TurtleArray, GameState
 from my_robot_interfaces.srv import CatchTurtle
-from functools import partial
+
+from catch_me_if_you_can.strategies.simple_strategy import SimpleStrategy
+from catch_me_if_you_can.strategies.manual_strategy import ManualStrategy
 
 class TurtleControllerNode(Node): 
     def __init__(self):
-        super().__init__("turtle_controller") 
+        super().__init__("turtle_controller")
         
-        # Déclaration du paramètre avec True par défaut
-        self.declare_parameter("catch_closest_turtle_first", True)
-        # Par défaut, on n'a pas de cible
-        self.target_x = None
-        self.target_y = None
-        self.target_name = None # On doit mémoriser qui on chasse
-        self.catch_turtle_client_ = self.create_client(CatchTurtle, "catch_turtle")
+        # Strategy Management
+        self.strategies = {
+            "basic": SimpleStrategy(),
+            "manual": ManualStrategy(),
+        }
+        self.current_strategy = self.strategies["basic"]
+        self.active_mode = "basic"
 
-        # SUBSCRIBER ( équivalent à capteur position) 
-        self.pose_ = None 
-        self.pose_subscriber_ = self.create_subscription(
-            Pose, "/turtle1/pose", self.callback_pose, 10) # 10 = taille du buffer
+        # Data Attributes
+        self.pose = None
+        self.alive_turtles = []
+        self.current_energy = 100.0
+        self.latest_teleop_cmd = Twist()
 
-        # SUBSCRIBER (Liste des tortues vivantes) 
-        self.alive_turtles_subscriber_ = self.create_subscription(
-            TurtleArray, "alive_turtles", self.callback_alive_turtles, 10)
-
-        # PUBLISHER (Commande Moteurs) 
-        self.cmd_vel_publisher_ = self.create_publisher(
-            Twist, "/turtle1/cmd_vel", 10)
-
-        #  TIMER (Boucle de contrôle) 
-        # 100 Hz (0.01s) pour une réaction fluide
-        self.control_loop_timer_ = self.create_timer(0.01, self.control_loop)
+        # memory 
+        self.catch_in_progress_name = None
         
-        self.get_logger().info("Turtle Controller démarré ! Cible : x=9, y=9")
+        # Communication Setup
+        self.cb_group = ReentrantCallbackGroup()
+
+        # Subscribers
+        self.create_subscription(Pose, "/turtle1/pose", self.callback_pose, 10)
+        self.create_subscription(TurtleArray, "alive_turtles", self.callback_alive_turtles, 10)
+        self.create_subscription(GameState, "game_state", self.callback_game_state, 10)
+        
+        # Subscriber for manual control (keyboard)
+        self.create_subscription(Twist, "/cmd_vel_teleop", self.callback_teleop, 10)
+
+        # Publishers & Clients
+        self.cmd_vel_publisher_ = self.create_publisher(Twist, "/turtle1/cmd_vel", 10)
+        self.catch_client_ = self.create_client(CatchTurtle, "catch_turtle", callback_group=self.cb_group)
+
+        # Control Loop
+        self.create_timer(0.01, self.control_loop)
+        
+        self.get_logger().info("Turtle Controller V2 ready")
 
     def callback_pose(self, msg):
-        self.pose_ = msg
+        self.pose = msg
 
     def callback_alive_turtles(self, msg):
-        # Sécurité : Si pas de tortues ou si on ne connait pas encore notre propre position
-        if len(msg.turtles) == 0 or self.pose_ is None:
-            return
+        self.alive_turtles = msg.turtles
 
-        # On récupère la valeur actuelle du paramètre (True ou False)
-        catch_closest = self.get_parameter("catch_closest_turtle_first").value
+    def callback_teleop(self, msg):
+        # We store the latest command from the keyboard
+        self.latest_teleop_cmd = msg
 
-        if catch_closest:
-            #  STRATÉGIE INTELLIGENTE : LA PLUS PROCHE 
-            closest_turtle = None
-            min_distance = float('inf') # Infini au départ
-
-            for turtle in msg.turtles:
-                # Pythagore pour chaque proie
-                dist_x = turtle.x - self.pose_.x
-                dist_y = turtle.y - self.pose_.y
-                distance = math.sqrt(dist_x**2 + dist_y**2)
-
-                # Si cette tortue est plus proche que la précédente trouvée
-                if distance < min_distance:
-                    min_distance = distance
-                    closest_turtle = turtle
-            
-            # On verrouille la cible la plus proche
-            if closest_turtle is not None:
-                self.target_x = closest_turtle.x
-                self.target_y = closest_turtle.y
-                self.target_name = closest_turtle.name
-
-        else:
-            #  STRATÉGIE BASIQUE : LA PREMIÈRE 
-            first_turtle = msg.turtles[0]
-            self.target_x = first_turtle.x
-            self.target_y = first_turtle.y
-            self.target_name = first_turtle.name
+    def callback_game_state(self, msg):
+        if msg.active_mode in self.strategies:
+            if self.active_mode != msg.active_mode:
+                self.get_logger().info(f"Switching strategy to: {msg.active_mode}")
+                self.current_strategy = self.strategies[msg.active_mode]
+                self.active_mode = msg.active_mode
+        
+        if msg.state == GameState.IDLE or msg.state == GameState.PAUSED:
+            self.active_mode = "STOP"
 
     def control_loop(self):
-        # 0. SECURITE : Si on n'a pas de position ou pas de cible, on annule.
-        if self.pose_ is None or self.target_x is None:
+        if self.pose is None or self.active_mode == "STOP":
             return
 
-        # 1. CALCUL DE L'ERREUR (Vecteurs)
-        dist_x = self.target_x - self.pose_.x
-        dist_y = self.target_y - self.pose_.y
-        distance = math.sqrt(dist_x**2 + dist_y**2)
-        
-        goal_theta = math.atan2(dist_y, dist_x)
-        diff_angle = goal_theta - self.pose_.theta
-        
-        # Normalisation de l'angle (Toujours prendre le chemin le plus court)
-        if diff_angle > math.pi:
-            diff_angle -= 2*math.pi
-        elif diff_angle < -math.pi:
-            diff_angle += 2*math.pi
+        # Pass the full context including teleop command to the strategy
+        cmd, catch_target = self.current_strategy.update(
+            self.pose, 
+            self.alive_turtles, 
+            self.current_energy,
+            self.latest_teleop_cmd
+        )
 
-        msg = Twist()
-
-        #  MARGE DE DISTANCE (Tolerance pour "manger") 
-        tolerance = 0.5 
-
-        # 2. PRISE DE DECISION
-        if distance > tolerance:
-            # ETAT : EN CHASSE (On est trop loin)
+        if catch_target:
             
-            # Contrôleur P (Proportionnel)
-            msg.linear.x = 1.0 * distance 
-            msg.angular.z = 6.0 * diff_angle
+            # On vérifie si on n'est pas deja en train d'essayer d'attraper celle-ci
+            if catch_target != self.catch_in_progress_name:
+                self.get_logger().info(f"Envoi demande capture pour: {catch_target}")
+                self.call_catch_service(catch_target)
+                self.catch_in_progress_name = catch_target # On verrouille
+            
+            # On arrête le moteur dans tous les cas tant qu'on cible quelqu'un
+            cmd = Twist()
+           
             
         else:
-            # ETAT : CIBLE ATTEINTE (Distance <= 0.5m)
             
-            # On stoppe les moteurs
-            msg.linear.x = 0.0
-            msg.angular.z = 0.0
-            
-            # Si on a bien un nom de cible en mémoire (pour ne pas appeler dans le vide)
-            if self.target_name is not None:
-                self.get_logger().info(f"Cible atteinte ! Je mange {self.target_name}...")
-                
-                # 3. APPEL DU SERVICE (On demande au spawner de la tuer)
-                from my_robot_interfaces.srv import CatchTurtle # Import au cas où
-                request = CatchTurtle.Request()
-                request.name = self.target_name
-                
-                # Envoi asynchrone (On n'attend pas bloqué ici)
-                self.catch_turtle_client_.call_async(request)
-                
-                # TRES IMPORTANT : On "oublie" le nom de cette cible.
-                # Pourquoi ? Pour éviter de renvoyer 100 requêtes de meurtre par seconde 
-                # au serveur pendant que Turtlesim gère l'animation de disparition.
-                self.target_name = None
+            self.catch_in_progress_name = None
 
-        # 4. ENVOI AUX MOTEURS
-        self.cmd_vel_publisher_.publish(msg)
+        self.cmd_vel_publisher_.publish(cmd)
+
+    def call_catch_service(self, turtle_name):
+        req = CatchTurtle.Request()
+        req.name = turtle_name
+        future = self.catch_client_.call_async(req)
+        future.add_done_callback(partial(self.callback_catch_response, name=turtle_name))
+
+    def callback_catch_response(self, future, name):
+        try:
+            response = future.result()
+            if not response.success:
+                self.get_logger().warn(f"Échec capture {name}. Suppression locale.")
+                self.alive_turtles = [t for t in self.alive_turtles if t.name != name]
+            
+            
+            if self.catch_in_progress_name == name:
+                self.catch_in_progress_name = None
+           
+
+        except Exception as e:
+            self.get_logger().error(f"Service call failed: {e}")
+            self.catch_in_progress_name = None 
 
 def main(args=None):
     rclpy.init(args=args)
-    node = TurtleControllerNode() 
-    rclpy.spin(node)
+    node = TurtleControllerNode()
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
+    executor.spin()
     rclpy.shutdown()
 
 if __name__ == "__main__":

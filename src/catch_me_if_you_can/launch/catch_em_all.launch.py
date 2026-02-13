@@ -1,33 +1,57 @@
+import os
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch_ros.actions import Node
 
 def generate_launch_description():
     ld = LaunchDescription()
 
-    # 1. Le Simulateur
+    # Path to config file
+    config_file = os.path.join(
+        get_package_share_directory('catch_me_if_you_can'),
+        'config',
+        'game_config.yaml'
+    )
+
+    # 1. Turtlesim Node
     turtlesim_node = Node(
         package="turtlesim",
-        executable="turtlesim_node"
+        executable="turtlesim_node",
+        name="turtlesim"
     )
 
-    # 2. Le Spawner (Maître du jeu)
+    # 2. Spawner Node
     spawner_node = Node(
         package="catch_me_if_you_can",
-        executable="turtle_spawner"
+        executable="turtle_spawner",
+        parameters=[{"spawn_frequency": 1.5}]
     )
 
-    # 3. Le Contrôleur (Chasseur)
+    # 3. Game Manager Node
+    manager_node = Node(
+        package="catch_me_if_you_can",
+        executable="game_manager",
+        parameters=[config_file]
+    )
+
+    # 4. Controller Node (The Player)
     controller_node = Node(
         package="catch_me_if_you_can",
         executable="turtle_controller",
-        parameters=[
-            {"catch_closest_turtle_first": True} # On passe le paramètre ici !
-        ]
+        # Parameters can be added here if needed later
     )
 
-    # On ajoute tout à la liste de lancement
+    # 5. Game Interface
+    gui_node = Node(
+        package="catch_me_if_you_can",
+        executable="game_gui",
+        name="game_gui"
+    )
+
     ld.add_action(turtlesim_node)
     ld.add_action(spawner_node)
+    ld.add_action(manager_node)
     ld.add_action(controller_node)
+    ld.add_action(gui_node)
 
     return ld

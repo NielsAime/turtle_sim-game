@@ -1,0 +1,3 @@
+# Pas de requête nécessaire (c'est un bouton)
+---
+bool is_paused    # True si le jeu est maintenant en pause, False sinon

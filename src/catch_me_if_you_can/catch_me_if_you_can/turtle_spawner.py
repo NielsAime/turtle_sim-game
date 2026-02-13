@@ -1,151 +1,154 @@
-
-from urllib import response
+#!/usr/bin/env python3
 import rclpy
-# on écrit ça juste pour éviter dee fqire un .node à chaque fois. 
 from rclpy.node import Node
+from rclpy.callback_groups import ReentrantCallbackGroup
+from functools import partial
 import random
 import math
 
-
-from turtlesim.srv import Spawn
-from functools import partial
-
-# On importe les outils 
-from turtlesim.srv import Kill
+from turtlesim.srv import Spawn, Kill
 from my_robot_interfaces.srv import CatchTurtle
-
-# On importe les strucutres de données pour les messages pour turtle et turtle array, qui sont définies dans le package d'interfaces.
-from my_robot_interfaces.msg import Turtle       
-from my_robot_interfaces.msg import TurtleArray
-
+from my_robot_interfaces.msg import Turtle, TurtleArray
+from my_robot_interfaces.msg import Turtle, TurtleArray, GameState 
+from std_msgs.msg import Empty # just to tell that a turtle was eaten to update the score
 class TurtleSpawnerNode(Node): 
-    # Init en ros est le constructeur de la classe, enfin du noeud
-    # Il est donc appelé une fois dans le main où 
-    # on y met ses attributs, on initialise le trigger, pour le service
-    # on y crée tout le cablage du noeud, sa structure de mémoire interne et son cablage avec l'extérieur.
-    # C'est à dire suscriber, publisher, serveur, client, ... 
-    # donc ici le timer  qui appel la fonction générant la requete de spawn.
     def __init__(self):
         super().__init__("turtle_spawner") 
-        self.get_logger().info("Turtle Spawner démarré !")
-        # mémoire : 
-        # On crée une liste vide pour stocker nos futures victimes
+        self.declare_parameter("spawn_frequency", 2.0)
+        self.spawn_rate = self.get_parameter("spawn_frequency").value
+
+        # Data
         self.alive_turtles_ = []
-        #service client pour spaw
-        # 
-        # publisher :
+        self.turtle_names = ["Victor", "Ethan", "Victoire", "Alexandre", "Remi", "Robin", 
+                             "Alexis", "Lucas", "Cyprien", "Hugo", "Niels", "Chelsea", 
+                             "Tony", "Malcom", "Raphael", "Lylou", "Oscar", "Nicolas", 
+                             "Romael", "Thelma", "Abdullah", "Samuel", "Benjamin", "Youssouf", "Oussama"]
+        
+        self.is_game_running = False
+        # Communication
+        self.cb_group = ReentrantCallbackGroup() # Allows parallel processing
 
-        self.alive_turtles_publisher_ = self.create_publisher(
-            TurtleArray, "alive_turtles", 10)
-        #10 = taille de la queue, c'est à dire le nombre de messages que le publisher peut stocker avant de les envoyer.
+        self.alive_turtles_publisher_ = self.create_publisher(TurtleArray, "alive_turtles", 10)
+        self.score_publisher_ = self.create_publisher(Empty, "score_event", 10)
 
-        # Le Client pour effacer la tortue de l'écran (service de Turtlesim)
-        self.kill_client_ = self.create_client(Kill, "/kill")
-        # Le Serveur (Service Custom) que le Contrôleur va appeler
-        self.catch_turtle_server_ = self.create_service(
-            CatchTurtle, "catch_turtle", self.callback_catch_turtle)
         self.spawn_client_ = self.create_client(Spawn, "/spawn")
-        self.index = 0
-
+        self.kill_client_ = self.create_client(Kill, "/kill")
+        
+        self.catch_service_ = self.create_service(
+            CatchTurtle, 
+            "catch_turtle", 
+            self.callback_catch_turtle,
+            callback_group=self.cb_group)
+        
+        #to know whento start the game and when to stop spawning turtles
+        self.create_subscription(GameState, "game_state", self.callback_game_state, 10)
+        # Wait for Turtlesim
         while not self.spawn_client_.wait_for_service(timeout_sec=1.0):
-            self.get_logger().warn("J'attends que Turtlesim démarre...")
+            self.get_logger().warn("Waiting for Turtlesim...")
 
-
-        self.spawn_timer_ = self.create_timer(2.0, self.spawn_turtle_logic)
+        # Timer
+        self.spawn_timer_ = self.create_timer(self.spawn_rate, self.spawn_turtle_logic)
+        self.get_logger().info("Turtle Spawner V2 Ready!")
 
     def spawn_turtle_logic(self):
 
-        x = random.uniform(0.0, 11.0)
-        y = random.uniform(0.0, 11.0)
+        if not self.is_game_running:
+            return
+        # Random Position
+        
+        x = random.uniform(0.5, 10.5) # Avoid edges
+        y = random.uniform(0.5, 10.5)
         theta = random.uniform(0.0, 2 * math.pi)
 
-        names =["Victor", "Ethan", "Victoire", "Alexandre", "Remi", "Robin", "Alexis", "Lucas", "Cyprien", 
-                "Hugo", "Niels", "Chelsea", "Tony", "Malcom", "Raphael", "Lylou", "Oscar",
-                 "Nicolas", "Romael", "Thelma", "Abdullah", "Samuel", "Hugo", "Benjamin", "Youssouf", "Oussama"]
-        
-
+        # Unique Name Generation
+        raw_name = random.choice(self.turtle_names)
+        unique_name = self.get_unique_name(raw_name)
 
         request = Spawn.Request()
         request.x = x
         request.y = y
         request.theta = theta
-       
-       # on utilise le modulo taille de la liste pour ne pas dépasser le nombre de noms dispo
-        request.name = names[self.index % len(names)]
-        self.index += 1
+        request.name = unique_name
 
-        #ON ajoute pas tout de suite la tortue à la mémoire, on attend la réponse du serveur pour être sûr qu'elle a été créée avant de l'ajouter à la liste.
         future = self.spawn_client_.call_async(request)
+        future.add_done_callback(
+            partial(self.callback_spawn_response, x=x, y=y, theta=theta, name=unique_name)
+        )
+    def get_unique_name(self, base_name):
+        """Cherche un nom disponible (ex: Victor, puis Victor_1, puis Victor_2...)"""
+        count = 1
+        candidate = base_name
         
-
-        future.add_done_callback(partial(self.callback_spawn_response, x=x, y=y, theta=theta))
-        # le partial permet d'attacher des arguments qui ne sont pas encore vraiment disponible au moment de la création. c'est un avantag de python. ils seront disponibles au momentde l'appel. 
-    def callback_spawn_response(self, future, x, y, theta):
-        # ON utilise un futur pour attendre un retour du serveur sans bloquer le client.
-        # Il faut donc absolument mettre le futur en paramètre pour que le systeme attende la reponse serveur.
-        
-           
+        # On vérifie si 'candidate' est déjà présent dans la liste des tortues vivantes
+        # any(...) renvoie True si on trouve une correspondance
+        while any(t.name == candidate for t in self.alive_turtles_):
+            candidate = f"{base_name}_{count}"
+            count += 1
+            
+        return candidate
+    
+    def callback_spawn_response(self, future, x, y, theta, name):
         try:
-
-            # On vérifie la réponse du serveur
             response = future.result()
-            
-            # On récupère le nom depuis la réponse officielle du serveur ( on le fait pas avant pour quand la liste est finie, puisque turtlesim ajoute un nombre).
-            name = response.name
-            #  On crée un objet Turtle 
-            new_turtle = Turtle()
-            new_turtle.name = name
-            new_turtle.x = x
-            new_turtle.y = y
-            new_turtle.theta = theta 
-            
-            # On l'ajoute à la mémoire interne
-            self.alive_turtles_.append(new_turtle)
-            
-            # 3. On publie la liste mise à jour
-            self.publish_alive_turtles()
-
-            self.get_logger().info(f"Tortue {name} créée en ({x:.2f}, {y:.2f})")
+            if response.name: # If success (sometimes turtlesim returns empty if failed)
+                # Confirm the name used by turtlesim
+                actual_name = response.name 
+                
+                new_turtle = Turtle()
+                new_turtle.name = actual_name
+                new_turtle.x = x
+                new_turtle.y = y
+                new_turtle.theta = theta
+                
+                self.alive_turtles_.append(new_turtle)
+                self.publish_alive_turtles()
+                self.get_logger().info(f"Spawned {actual_name} at ({x:.1f}, {y:.1f})")
         except Exception as e:
-            self.get_logger().error(f"L'appel au service a échoué : {e}")
+            self.get_logger().error(f"Spawn failed for {name}: {e}")
+
+    def callback_catch_turtle(self, request, response):
+        target = request.name
+        
+        # Find and remove
+        turtle_to_remove = None
+        for t in self.alive_turtles_:
+            if t.name == target:
+                turtle_to_remove = t
+                break
+        
+        if turtle_to_remove:
+            self.alive_turtles_.remove(turtle_to_remove)
+            self.publish_alive_turtles()
+            
+            # Kill in Turtlesim
+            kill_req = Kill.Request()
+            kill_req.name = target
+            self.kill_client_.call_async(kill_req)
+            
+            response.success = True
+
+            self.score_publisher_.publish(Empty())
+            self.get_logger().info(f"Caught {target}!")
+        else:
+            response.success = False
+            self.get_logger().warn(f"Failed to catch {target}: Not in list.")
+            self.publish_alive_turtles()
+        return response
+
+    def callback_game_state(self, msg):
+        if msg.state == GameState.RUNNING:
+            self.is_game_running = True
+        else:
+            self.is_game_running = False
+
     def publish_alive_turtles(self):
-        # On prépare le message "Valise" qui contient la liste
-        # fonction appelée dans le callback à chaque fois qu'on ajoute une tortue
-        # POur publier la liste mise à jour sur le topic. 
         msg = TurtleArray()
         msg.turtles = self.alive_turtles_
         self.alive_turtles_publisher_.publish(msg)
 
-
-    #fonction de callback du service de capture, qui est appelée à chaque fois que le contrôleur appelle le service pour attraper une tortue.
-    def callback_catch_turtle(self, request, response):
-    # request.name contient le nom de la tortue attrapée (ex: "turtle2")
-    
-    # 1. On cherche la tortue dans notre liste mémoire
-        for turtle in self.alive_turtles_:
-            if turtle.name == request.name:
-            # 2. On la supprime de la liste Python
-                self.alive_turtles_.remove(turtle)
-            
-            # 3. On publie immédiatement la nouvelle liste (mise à jour)
-                self.publish_alive_turtles()
-            
-            # 4. On demande à Turtlesim de l'effacer de l'écran
-                kill_request = Kill.Request()
-                kill_request.name = request.name
-                self.kill_client_.call_async(kill_request)
-            
-                self.get_logger().info(f"Miam ! {request.name} a été mangée.")
-                response.success = True
-                return response
-            
-    # Si on ne l'a pas trouvée (erreur ou déjà mangée)
-        response.success = False
-        return response
-
 def main(args=None):
     rclpy.init(args=args)
-    node = TurtleSpawnerNode() 
+    node = TurtleSpawnerNode()
     rclpy.spin(node)
     rclpy.shutdown()
 
