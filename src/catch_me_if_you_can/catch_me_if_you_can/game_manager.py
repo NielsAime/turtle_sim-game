@@ -21,8 +21,8 @@ class GameManagerNode(Node):
         
         # Declare Parameters (loaded from YAML later)
         self.declare_parameter("initial_energy", 100.0)
-        self.declare_parameter("energy_drain_idle", 0.5)
-        self.declare_parameter("energy_drain_move", 10.0)
+        self.declare_parameter("energy_drain_idle", 2.0)
+        self.declare_parameter("energy_drain_move", 4.0)
         # Dans le __init__ de GameManagerNode
         self.declare_parameter("catch_score_reward", 10)
         self.declare_parameter("catch_energy_reward", 10.0)

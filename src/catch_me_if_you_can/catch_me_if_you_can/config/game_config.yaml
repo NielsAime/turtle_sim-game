@@ -3,7 +3,7 @@
     # Energy Physics
     initial_energy: 100.0
     energy_drain_idle: 0.5    # Energy lost per second doing nothing
-    energy_drain_move: 5.0   # Factor multiplied by speed squared (v^2)
+    energy_drain_move: 2.0   # Factor multiplied by speed squared (v^2)
     catch_score_reward: 10
     catch_energy_reward: 10.0
     # Thresholds

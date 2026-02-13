@@ -11,6 +11,7 @@ from my_robot_interfaces.srv import CatchTurtle
 
 from catch_me_if_you_can.strategies.simple_strategy import SimpleStrategy
 from catch_me_if_you_can.strategies.manual_strategy import ManualStrategy
+from catch_me_if_you_can.strategies.smart_strategy import SmartStrategy
 
 class TurtleControllerNode(Node): 
     def __init__(self):
@@ -20,6 +21,7 @@ class TurtleControllerNode(Node):
         self.strategies = {
             "basic": SimpleStrategy(),
             "manual": ManualStrategy(),
+            "smart": SmartStrategy(),
         }
         self.current_strategy = self.strategies["basic"]
         self.active_mode = "basic"
