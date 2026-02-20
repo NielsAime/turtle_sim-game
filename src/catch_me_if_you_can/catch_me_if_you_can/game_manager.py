@@ -8,7 +8,7 @@ from rclpy.executors import MultiThreadedExecutor
 import time
 import math
 
-# Custom Interfaces
+# custom interfaces that we defined in my_robot_interfaces package
 from my_robot_interfaces.msg import GameState
 from my_robot_interfaces.action import GameSession
 from my_robot_interfaces.srv import TogglePause
@@ -71,18 +71,18 @@ class GameManagerNode(Node):
         self.get_logger().info("Game Manager is ready! Waiting for action goal...")
         self.publish_game_state(GameState.IDLE, "none")
 
-    #  CALLBACKS & LOGIC
+    #  callback and logics
     def callback_score_event(self, msg):
         if self.game_state == GameState.RUNNING:
-            # 1. Récupération des valeurs depuis les paramètres
+            # Récupération des valeurs depuis les paramètres
             score_reward = self.get_parameter("catch_score_reward").value
             energy_reward = self.get_parameter("catch_energy_reward").value
             max_energy = self.get_parameter("initial_energy").value
             
-            # 2. Mise à jour du score
+            # Mise à jour du score
             self.current_score += score_reward
             
-            # 3. Mise à jour de l'énergie avec plafonnement (Clamping)
+            # Mise à jour de l'énergie avec plafonnement (Clamping)
             # On ne peut pas dépasser l'énergie initiale (100%)
             self.current_energy = min(self.current_energy + energy_reward, max_energy)
             
@@ -122,7 +122,7 @@ class GameManagerNode(Node):
     def execute_game_callback(self, goal_handle):
         self.get_logger().info(" STARTING NEW GAME SESSION ")
         
-        #  Initialize Game Session
+        # Initialize Game Session
         goal = goal_handle.request
         self.current_mode = goal.mode
         self.current_energy = self.get_parameter("initial_energy").value
@@ -165,7 +165,7 @@ class GameManagerNode(Node):
                 loop_rate.sleep()
                 continue
 
-            #  PHYSICS & GAMEPLAY LOGIC 
+            #  physics and gameplay logic
             
             # Calculate speed (v) based on distance traveled since last frame
             distance = 0.0
@@ -201,7 +201,7 @@ class GameManagerNode(Node):
             # Wait for next cycle
             loop_rate.sleep()
 
-        # 3. Game Over Logic
+        # Game Over Logic
         self.get_logger().info(" GAME OVER ")
         
         if self.current_energy <= 0:

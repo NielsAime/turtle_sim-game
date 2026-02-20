@@ -1,7 +1,7 @@
 # GOAL
 # Sent by the Client (UI) to start a game
 int32 duration_sec    # Game duration in seconds
-string mode   # Difficulty or strategy mode (e.g., "manual", "auto_basic", "auto_smart")
+string mode   # strategy mode (e.g., "manual", "auto_basic", "auto_smart")
 string player_name    
 
 ---
@@ -11,7 +11,7 @@ int32 final_score
 bool success          # True if the game finished normally, False if aborted
 ---
 # FEEDBACK
-# Sent periodically by the Server during the game
+# Sent periodically by the Server during the game to update the interface
 float32 remaining_time_sec
 float32 current_energy
 int32 current_score

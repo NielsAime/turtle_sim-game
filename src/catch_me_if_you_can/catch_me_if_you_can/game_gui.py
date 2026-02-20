@@ -93,9 +93,9 @@ class CatchMeGui:
         self.root.geometry("400x550")
         self.ros_node = None
         
-        # --- UI LAYOUT ---
+        # UI LAYOUT 
         
-        # 1. Configuration Section
+        # Configuration :
         config_frame = ttk.LabelFrame(root, text="Game Configuration", padding=10)
         config_frame.pack(fill="x", padx=10, pady=5)
 
@@ -115,7 +115,7 @@ class CatchMeGui:
         self.duration_entry.insert(0, "60")
         self.duration_entry.grid(row=2, column=1, padx=5, pady=5)
 
-        # 2. Control Section
+        # Control Section
         control_frame = ttk.Frame(root, padding=10)
         control_frame.pack(fill="x", padx=10)
 
@@ -125,7 +125,7 @@ class CatchMeGui:
         self.pause_btn = ttk.Button(control_frame, text="PAUSE", command=self.on_pause_click, state="disabled")
         self.pause_btn.pack(side="right", expand=True, fill="x", padx=5)
 
-        # 3. Monitor Section
+        # Monitor Section
         monitor_frame = ttk.LabelFrame(root, text="Live Monitor", padding=10)
         monitor_frame.pack(fill="both", expand=True, padx=10, pady=5)
 

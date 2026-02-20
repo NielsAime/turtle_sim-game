@@ -40,7 +40,7 @@ class TurtleSpawnerNode(Node):
             self.callback_catch_turtle,
             callback_group=self.cb_group)
         
-        #to know whento start the game and when to stop spawning turtles
+        # To know when to start the game and when to stop spawning turtles
         self.create_subscription(GameState, "game_state", self.callback_game_state, 10)
         # Wait for Turtlesim
         while not self.spawn_client_.wait_for_service(timeout_sec=1.0):
@@ -54,13 +54,13 @@ class TurtleSpawnerNode(Node):
 
         if not self.is_game_running:
             return
-        # Random Position
+        # Random position
         
         x = random.uniform(0.5, 10.5) # Avoid edges
         y = random.uniform(0.5, 10.5)
         theta = random.uniform(0.0, 2 * math.pi)
 
-        # Unique Name Generation
+        # Unique name generation
         raw_name = random.choice(self.turtle_names)
         unique_name = self.get_unique_name(raw_name)
 
@@ -80,7 +80,7 @@ class TurtleSpawnerNode(Node):
         candidate = base_name
         
         # On vérifie si 'candidate' est déjà présent dans la liste des tortues vivantes
-        # any(...) renvoie True si on trouve une correspondance
+        # any renvoie True si on trouve une correspondance
         while any(t.name == candidate for t in self.alive_turtles_):
             candidate = f"{base_name}_{count}"
             count += 1
@@ -120,7 +120,7 @@ class TurtleSpawnerNode(Node):
             self.alive_turtles_.remove(turtle_to_remove)
             self.publish_alive_turtles()
             
-            # Kill in Turtlesim
+            # Kill in turtlesim
             kill_req = Kill.Request()
             kill_req.name = target
             self.kill_client_.call_async(kill_req)

@@ -10,7 +10,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Docker - Logs et temp (optionnel)
+# Docker - Logs et temp 
 .docker/
 
 # OS

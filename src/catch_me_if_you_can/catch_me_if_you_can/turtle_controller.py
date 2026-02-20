@@ -35,22 +35,22 @@ class TurtleControllerNode(Node):
         # memory 
         self.catch_in_progress_name = None
         
-        # Communication Setup
+        # communication setup
         self.cb_group = ReentrantCallbackGroup()
 
-        # Subscribers
+        # subscribers
         self.create_subscription(Pose, "/turtle1/pose", self.callback_pose, 10)
         self.create_subscription(TurtleArray, "alive_turtles", self.callback_alive_turtles, 10)
         self.create_subscription(GameState, "game_state", self.callback_game_state, 10)
         
-        # Subscriber for manual control (keyboard)
+        # subscriber for manual control (keyboard)
         self.create_subscription(Twist, "/cmd_vel_teleop", self.callback_teleop, 10)
 
-        # Publishers & Clients
+        # publishers & clients
         self.cmd_vel_publisher_ = self.create_publisher(Twist, "/turtle1/cmd_vel", 10)
         self.catch_client_ = self.create_client(CatchTurtle, "catch_turtle", callback_group=self.cb_group)
 
-        # Control Loop
+        # control loop
         self.create_timer(0.01, self.control_loop)
         
         self.get_logger().info("Turtle Controller V2 ready")

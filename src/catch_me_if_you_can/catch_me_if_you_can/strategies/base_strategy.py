@@ -1,4 +1,7 @@
 from geometry_msgs.msg import Twist
+ 
+# We create a base class for our strategies to ensure they all have the same interface and can be easily swapped in the controller. 
+# (Apparently better for the code to be clean and modular instead of using "if")
 
 class TurtleStrategy:
     def __init__(self):

@@ -13,35 +13,35 @@ def generate_launch_description():
         'game_config.yaml'
     )
 
-    # 1. Turtlesim Node
+    # Turtlesim node
     turtlesim_node = Node(
         package="turtlesim",
         executable="turtlesim_node",
         name="turtlesim"
     )
 
-    # 2. Spawner Node
+    # Spawner node
     spawner_node = Node(
         package="catch_me_if_you_can",
         executable="turtle_spawner",
         parameters=[{"spawn_frequency": 1.5}]
     )
 
-    # 3. Game Manager Node
+    # Game manager node
     manager_node = Node(
         package="catch_me_if_you_can",
         executable="game_manager",
         parameters=[config_file]
     )
 
-    # 4. Controller Node (The Player)
+    #  Controller Node 
     controller_node = Node(
         package="catch_me_if_you_can",
         executable="turtle_controller",
         # Parameters can be added here if needed later
     )
 
-    # 5. Game Interface
+    # Game interface
     gui_node = Node(
         package="catch_me_if_you_can",
         executable="game_gui",
